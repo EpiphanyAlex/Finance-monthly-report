@@ -1,0 +1,41 @@
+# 复制成 config.yaml 后改这里。这个文件可以提交进 git —— 里面没有密钥。
+# 密钥全部走环境变量(本地 .env,线上 GitHub Secrets)。
+
+business:
+  name: "Your Company Pty Ltd"
+  timezone: "Australia/Melbourne"   # 月份边界按这个时区切,不是 UTC
+  home_currency: "aud"
+  report_language: "zh"             # zh / en
+
+xero:
+  # GST 负债科目的代码。AU 标准科目表通常是 820。
+  # 填错了脚本会报错并列出你账上的候选科目,照着改一次就行。
+  gst_account_code: "820"
+
+  # 要计入现金余额的银行科目代码。留空 = 全部银行账户。
+  bank_account_codes: []
+
+stripe:
+  # 哪些订阅状态计入 MRR。行业惯例是 active + past_due。
+  mrr_statuses: ["active", "past_due"]
+
+  # 试用期是否计入 MRR。惯例是不计(还没付钱)。
+  include_trialing: false
+
+  # 多币种时的换算汇率(→ 本位币)。只有一种币种就留空。
+  # 缺汇率的币种不会被静默忽略,会在 warnings 里报出来。
+  fx_to_home:
+    # usd: 1.52
+    # nzd: 0.92
+
+  # 扫描已取消订阅的页数上限(每页 100 条)。订阅量大就调高。
+  churn_scan_max_pages: 20
+
+llm:
+  model: "gpt-4.1"      # 改成你 OpenAI 账号里可用的模型
+  temperature: 0.3
+
+deliver:
+  email_to: []          # ["you@yourcompany.com"] —— 留空则不发邮件
+  email_from: ""        # 留空则用 SMTP_USER
+  sheet_tab: "monthly"  # Google Sheet 里的工作表名

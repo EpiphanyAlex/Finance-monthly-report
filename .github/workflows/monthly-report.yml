@@ -1,0 +1,66 @@
+name: 财务月报
+
+on:
+  schedule:
+    # 每月 1 日 00:30 UTC = 墨尔本 1 日上午 10:30/11:30。
+    # 此时上个月在本地时区已完整结束。改时区的话记得重算这个 UTC 时间。
+    - cron: "30 0 1 * *"
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "回溯月份 YYYY-MM(留空 = 上个月)"
+        required: false
+      no_llm:
+        description: "只算数字,不调模型"
+        type: boolean
+        default: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 生成月报
+        env:
+          XERO_CLIENT_ID: ${{ secrets.XERO_CLIENT_ID }}
+          XERO_CLIENT_SECRET: ${{ secrets.XERO_CLIENT_SECRET }}
+          XERO_REFRESH_TOKEN: ${{ secrets.XERO_REFRESH_TOKEN }}
+          XERO_TENANT_ID: ${{ secrets.XERO_TENANT_ID }}
+          XERO_SCOPES: ${{ secrets.XERO_SCOPES }}
+          # refresh token 每次使用都会轮换,跑完要把新值写回 Secret
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          # 手动触发的输入一律先落到环境变量,不直接插进 run: —— 避免命令注入
+          INPUT_MONTH: ${{ inputs.month }}
+          INPUT_NO_LLM: ${{ inputs.no_llm }}
+        run: |
+          args=()
+          if [[ -n "$INPUT_MONTH" ]]; then
+            [[ "$INPUT_MONTH" =~ ^[0-9]{4}-[0-9]{2}$ ]] || { echo "month 必须是 YYYY-MM 格式"; exit 1; }
+            args+=(--month "$INPUT_MONTH")
+          fi
+          [[ "$INPUT_NO_LLM" == "true" ]] && args+=(--no-llm)
+          python run.py "${args[@]}"
+
+      - name: 存档
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-report
+          path: out/
+          retention-days: 90

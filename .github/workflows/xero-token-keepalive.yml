@@ -1,0 +1,45 @@
+name: Xero token 保活
+
+# 为什么需要这个 job:
+#   1. Xero 的 refresh token 未使用满 60 天就失效,失效后必须人工重新授权。
+#   2. GitHub 会在仓库 60 天没有活动后自动禁用定时 workflow —— 定时任务
+#      自己跑不算"活动",所以这里顺手提交一个时间戳文件把计时器按回去。
+#   每周跑一次,两个 60 天窗口都不会走到头。
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # 每周一
+  workflow_dispatch:
+
+permissions:
+  contents: write # 用内置 GITHUB_TOKEN 提交时间戳,不需要 PAT
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 刷新 Xero token
+        env:
+          XERO_CLIENT_ID: ${{ secrets.XERO_CLIENT_ID }}
+          XERO_CLIENT_SECRET: ${{ secrets.XERO_CLIENT_SECRET }}
+          XERO_REFRESH_TOKEN: ${{ secrets.XERO_REFRESH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }} # 写回 XERO_REFRESH_TOKEN 需要 Secrets 写权限
+        run: python run.py --refresh-only
+
+      - name: 提交时间戳(重置仓库活动计时)
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive
+          git diff --staged --quiet || git commit -m "chore: keepalive"
+          git push
