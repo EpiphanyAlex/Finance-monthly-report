@@ -195,9 +195,15 @@ def iter_rows(report: dict) -> Iterator[tuple[str, list[dict]]]:
             yield "", block.get("Cells", [])
 
 
+# Xero 在不同报表里用不同的属性名指同一样东西:
+#   TrialBalance → "account"      BankSummary → "accountID"
+# 只认其中一个的话,另一张报表的所有行都会被静默跳过(现金会变成 0)。
+ACCOUNT_ID_ATTRS = {"account", "accountID"}
+
+
 def cell_account_id(cell: dict) -> str | None:
     for attr in cell.get("Attributes") or []:
-        if attr.get("Id") == "account":
+        if attr.get("Id") in ACCOUNT_ID_ATTRS:
             return attr.get("Value")
     return None
 
@@ -209,13 +215,17 @@ def find_row_by_account_id(report: dict, account_id: str) -> list[dict] | None:
     return None
 
 
-def summary_rows(report: dict) -> dict[str, Decimal]:
-    """抓出所有 SummaryRow,形成 {标签: 数值}。用于 P&L 这类标签因地区而异的报表。"""
+def label_values(report: dict) -> dict[str, Decimal]:
+    """把两列的报表拍平成 {标签: 数值}。用于 P&L 这类标签因地区而异的报表。
+
+    必须同时收 Row 和 SummaryRow:Xero 的 P&L 里 "Total Income" 是 SummaryRow,
+    但 "GROSS PROFIT" / "NET PROFIT" 是普通 Row。只收 SummaryRow 会拿不到净利。
+    """
     out: dict[str, Decimal] = {}
     for block in report.get("Rows", []):
         rows = block.get("Rows", []) if block.get("RowType") == "Section" else [block]
         for row in rows:
-            if row.get("RowType") != "SummaryRow":
+            if row.get("RowType") not in ("Row", "SummaryRow"):
                 continue
             cells = row.get("Cells", [])
             if len(cells) < 2:
@@ -303,7 +313,7 @@ def collect(client: XeroClient, period, gst_account_code: str, bank_codes: list[
     # P&L 的行标签因地区和科目表配置而异,所以整块原样收下来,再尽力猜三个关键值。
     # 猜不到就是 None —— 这一项不如 GST 关键,不值得让整个任务失败。
     pnl = client.report("ProfitAndLoss", fromDate=start, toDate=end)
-    pnl_labels = summary_rows(pnl)
+    pnl_labels = label_values(pnl)
 
     return {
         "gst": {
@@ -324,6 +334,7 @@ def collect(client: XeroClient, period, gst_account_code: str, bank_codes: list[
             "income": money.fmt(pick(pnl_labels, "total income", "total revenue", "total trading income")),
             "expenses": money.fmt(pick(pnl_labels, "total operating expenses", "total expenses")),
             "net_profit": money.fmt(pick(pnl_labels, "net profit", "profit for the period", "net income")),
-            "all_summary_rows": {k: money.fmt(v) for k, v in pnl_labels.items()},
+            "gross_profit": money.fmt(pick(pnl_labels, "gross profit")),
+            "all_rows": {k: money.fmt(v) for k, v in pnl_labels.items()},
         },
     }

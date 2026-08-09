@@ -10,8 +10,9 @@ SAVINGS_ACCOUNT_ID = "33333333-3333-3333-3333-333333333333"
 SALES_ACCOUNT_ID = "44444444-4444-4444-4444-444444444444"
 
 
-def _acct_cell(name, account_id):
-    return {"Value": name, "Attributes": [{"Value": account_id, "Id": "account"}]}
+def _acct_cell(name, account_id, attr_id="account"):
+    """Xero 用两种属性名指同一个东西:TrialBalance 用 account,BankSummary 用 accountID。"""
+    return {"Value": name, "Attributes": [{"Value": account_id, "Id": attr_id}]}
 
 
 ACCOUNTS = {
@@ -70,14 +71,15 @@ BANK_SUMMARY = {
                 {"Value": "Cash Received"}, {"Value": "Cash Spent"},
                 {"Value": "Closing Balance"},
             ]},
+            # 真实 BankSummary 的科目单元格用 Id="accountID"(不是 "account")
             {"RowType": "Section", "Title": "", "Rows": [
                 {"RowType": "Row", "Cells": [
-                    _acct_cell("Business Bank Account", BANK_ACCOUNT_ID),
+                    _acct_cell("Business Bank Account", BANK_ACCOUNT_ID, "accountID"),
                     {"Value": "86580.50"}, {"Value": "24880.00"},
                     {"Value": "19320.40"}, {"Value": "92140.10"},
                 ]},
                 {"RowType": "Row", "Cells": [
-                    _acct_cell("Savings Account", SAVINGS_ACCOUNT_ID),
+                    _acct_cell("Savings Account", SAVINGS_ACCOUNT_ID, "accountID"),
                     {"Value": "50000.00"}, {"Value": "0.00"},
                     {"Value": "0.00"}, {"Value": "50000.00"},
                 ]},
@@ -96,7 +98,7 @@ PROFIT_AND_LOSS = {
         "ReportID": "ProfitAndLoss",
         "Rows": [
             {"RowType": "Header", "Cells": [{"Value": ""}, {"Value": "31 Jul 26"}]},
-            {"RowType": "Section", "Title": "Income", "Rows": [
+            {"RowType": "Section", "Title": " Income", "Rows": [
                 {"RowType": "Row", "Cells": [
                     _acct_cell("Sales", SALES_ACCOUNT_ID), {"Value": "25,100.00"},
                 ]},
@@ -104,7 +106,14 @@ PROFIT_AND_LOSS = {
                     {"Value": "Total Income"}, {"Value": "25,100.00"},
                 ]},
             ]},
-            {"RowType": "Section", "Title": "Less Operating Expenses", "Rows": [
+            # 真实 P&L 里 GROSS PROFIT / NET PROFIT 是普通 Row,不是 SummaryRow,
+            # 而且是全大写。只收 SummaryRow 会拿不到净利。
+            {"RowType": "Section", "Title": "", "Rows": [
+                {"RowType": "Row", "Cells": [
+                    {"Value": "GROSS PROFIT"}, {"Value": "25,100.00"},
+                ]},
+            ]},
+            {"RowType": "Section", "Title": " Less Operating Expenses", "Rows": [
                 {"RowType": "Row", "Cells": [
                     {"Value": "Advertising"}, {"Value": "3,200.00"},
                 ]},
@@ -113,8 +122,8 @@ PROFIT_AND_LOSS = {
                 ]},
             ]},
             {"RowType": "Section", "Title": "", "Rows": [
-                {"RowType": "SummaryRow", "Cells": [
-                    {"Value": "Net Profit"}, {"Value": "5,120.00"},
+                {"RowType": "Row", "Cells": [
+                    {"Value": "NET PROFIT"}, {"Value": "5,120.00"},
                 ]},
             ]},
         ],

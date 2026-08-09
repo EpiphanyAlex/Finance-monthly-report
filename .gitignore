@@ -1,7 +1,9 @@
 .env
 .xero_token.json
-config.yaml
 out/
+
+# config.yaml 故意不忽略 —— 里面没有密钥,而且 GitHub Actions 需要它在仓库里。
+# 密钥一律走环境变量 / GitHub Secrets。
 __pycache__/
 *.pyc
 .pytest_cache/

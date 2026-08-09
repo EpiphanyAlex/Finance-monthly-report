@@ -62,16 +62,21 @@ class TestRowParsing:
         report = fx.TRIAL_BALANCE["Reports"][0]
         assert xero.find_row_by_account_id(report, "no-such-id") is None
 
-    def test_summary_rows_handles_thousands_separator(self):
+    def test_label_values_handles_thousands_separator(self):
         report = fx.PROFIT_AND_LOSS["Reports"][0]
-        rows = xero.summary_rows(report)
+        rows = xero.label_values(report)
         assert rows["Total Income"] == Decimal("25100.00")
-        assert rows["Net Profit"] == Decimal("5120.00")
+
+    def test_label_values_includes_plain_rows_not_just_summary_rows(self):
+        """NET PROFIT / GROSS PROFIT 在真实报表里是 Row,漏掉就取不到净利。"""
+        rows = xero.label_values(fx.PROFIT_AND_LOSS["Reports"][0])
+        assert rows["NET PROFIT"] == Decimal("5120.00")
+        assert rows["GROSS PROFIT"] == Decimal("25100.00")
 
     def test_pick_is_case_insensitive_and_ordered(self):
-        rows = xero.summary_rows(fx.PROFIT_AND_LOSS["Reports"][0])
+        rows = xero.label_values(fx.PROFIT_AND_LOSS["Reports"][0])
         assert xero.pick(rows, "total income") == Decimal("25100.00")
-        assert xero.pick(rows, "nope", "net profit") == Decimal("5120.00")
+        assert xero.pick(rows, "nope", "net profit") == Decimal("5120.00")  # 匹配 NET PROFIT
         assert xero.pick(rows, "does not exist") is None
 
 
@@ -80,6 +85,14 @@ class TestCollect:
         data = xero.collect(FakeXeroClient(), period, "820", [])
         assert data["gst"]["balance_owing"] == "4312.55"
         assert data["gst"]["account_name"] == "GST"
+
+    def test_bank_rows_use_accountID_attribute(self, period):
+        """BankSummary 用 accountID,TrialBalance 用 account。只认一个 → 现金变 0。"""
+        data = xero.collect(FakeXeroClient(), period, "820", [])
+        assert data["cash"]["closing_total"] != "0.00"
+        assert [a["name"] for a in data["cash"]["accounts"]] == [
+            "Business Bank Account", "Savings Account"
+        ]
 
     def test_cash_excludes_summary_row(self, period):
         """合计行没有 account 属性,不能被算进去 —— 否则现金翻倍。"""
@@ -97,6 +110,7 @@ class TestCollect:
         assert data["pnl"]["income"] == "25100.00"
         assert data["pnl"]["expenses"] == "19980.00"
         assert data["pnl"]["net_profit"] == "5120.00"
+        assert data["pnl"]["gross_profit"] == "25100.00"
 
     def test_report_dates_use_period_boundaries(self, period):
         client = FakeXeroClient()

@@ -31,6 +31,12 @@ cp .env.example .env
 
 ### 1. Xero:建一个免费的 OAuth App(3 分钟)
 
+> **前提:你的 Xero 账号得先有一个组织**,否则 `my.xero.com` 会被强制重定向到
+> 「Add your business」,进不去 My Xero 也建不了 Demo Company。
+> 新账号的做法:先 **Start trial**(免费 30 天,不用信用卡,**别点 Buy now**),
+> 然后 My Xero → **Try the Demo Company** → Country 选 **Australia**。
+> Demo Company 有预置数据,试用组织是空的 —— 要用 Demo Company 测。
+
 1. 去 [developer.xero.com/app/manage](https://developer.xero.com/app/manage) → **New app**
 2. App type 选 **Web app**(不是 Custom Connection —— 那个要收费,现阶段不需要)
 3. Redirect URI 填死这个:`http://localhost:8976/callback`
@@ -148,8 +154,17 @@ Xero 的 refresh token **每次使用都会轮换**,旧的立刻作废。所以�
 | P&L | Xero Profit and Loss | 行标签因地区而异,取不到就是 `—`,不影响其他数字 |
 
 **关于 GST:** Xero 的 Accounting API **没有 Activity Statement / BAS 端点**。
-GST Report 只有在 Xero 界面里手动 publish 之后才能通过 `Reports/{ReportID}` 取到,
-没法自动化。所以这里直接读 GST 负债科目的余额 —— 那个数就是你欠税局的钱,够用且干净。
+实测 `Reports/BASReport`、`Reports/GSTReport`、`Reports/ActivityStatement` 全部返回 404 ——
+scope 文档把它们列为 `accounting.reports.taxreports.read` 的资源有误导性,那两个报表只有在
+Xero 界面里手动 publish 之后才能通过 `Reports/{ReportID}` 取到,没法自动化。
+所以这里直接读 GST 负债科目的余额 —— 那个数就是你欠税局的钱,够用且干净。
+
+**踩过的两个解析坑**(已修 + 有回归测试,列在这里是因为你改代码时可能重新踩):
+
+- Xero 指同一个科目 ID 用了两个属性名:TrialBalance 是 `account`,BankSummary 是
+  `accountID`。只认一个 → 现金静默变成 0。
+- P&L 里 `Total Income` 是 `SummaryRow`,但 `GROSS PROFIT` / `NET PROFIT` 是普通 `Row`,
+  而且全大写。只收 SummaryRow → 净利取不到。
 
 **MRR 的坑:** 阶梯计价(tiered pricing)没有单价,算不了,脚本会跳过并在
 `warnings` 里点名是哪个订阅。不会静默让你的 MRR 偏低。多币种没配汇率同理。

@@ -14,13 +14,29 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Xero custom connection 的 scope。
-# 2026-04-29 之前创建的连接用下面这组(SCOPESV1);之后创建的用颗粒化的 SCOPESV2,
-# 名称见 https://developer.xero.com/documentation/guides/oauth2/scopes/
+# Xero 的颗粒化(granular)scope,一个 endpoint 一个 scope。
+#
+# 老的打包 scope(accounting.reports.read / accounting.transactions.read)已废弃:
+#   - Web / PKCE app:2026 年 3 月起新建的一律只有颗粒化 scope
+#   - Custom connection:2026-04-29 起同上
+#   - 更早创建的 app 可以继续用打包 scope 到 2027 年 9 月
+# 用了废弃 scope 的新 app 授权时会直接报 invalid_scope。
+#
+# 下面这组是本脚本真正需要的最小集 —— 只读,且只覆盖实际调用的四个 endpoint:
+#   Accounts          → accounting.settings.read
+#   Reports/TrialBalance   → ...trialbalance.read   (GST 科目余额)
+#   Reports/BankSummary    → ...banksummary.read    (现金)
+#   Reports/ProfitAndLoss  → ...profitandloss.read  (损益)
+#   Reports/BASReport 等   → ...taxreports.read     (备用,见 README)
+# 完整清单:https://developer.xero.com/documentation/guides/oauth2/scopes/
 # 需要覆盖时设环境变量 XERO_SCOPES(空格分隔)。
-DEFAULT_XERO_SCOPES = (
-    "accounting.reports.read accounting.transactions.read accounting.settings.read"
-)
+DEFAULT_XERO_SCOPES = " ".join([
+    "accounting.settings.read",
+    "accounting.reports.trialbalance.read",
+    "accounting.reports.banksummary.read",
+    "accounting.reports.profitandloss.read",
+    "accounting.reports.taxreports.read",
+])
 
 
 def die(msg: str) -> None:
