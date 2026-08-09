@@ -17,16 +17,35 @@ MRR,这报表就废了。所以脚本负责算数,模型只负责把算好的数
 
 ---
 
+## 🔒 动手之前:你的仓库必须是 Private
+
+**公开仓库的 GitHub Actions 运行日志、job summary、artifact,任何人不用登录就能看。**
+
+这个脚本会把 report.json 打印到日志、把月报写进 job summary、把 `out/` 传成 artifact。
+仓库只要是公开的,你的 **MRR、银行余额、GST 欠税额就挂在公网上**了 —— 而且不会有任何报错,
+你不会发现。
+
+所以:
+
+- 从模板建仓库时,可见性选 **Private**
+- 如果你是 fork 的:fork 公开仓库默认还是公开,**立刻**去 Settings → 拉到底 →
+  Change repository visibility → Private
+- 私有仓库的 Actions 免费额度是 2000 分钟/月,这个任务一次约 2 分钟,完全够用
+
+密钥本身是安全的(GitHub Secrets 在公开仓库也不会泄露),**泄露的是跑出来的数字。**
+
+---
+
 ## 15 分钟配好
 
 ### 0. 拿到代码
 
-点右上角 **Use this template** → 建自己的私有仓库 → clone 下来。
+点右上角 **Use this template** → 可见性选 **Private** → clone 下来。
 
 ```bash
 pip install -r requirements.txt
-cp config.example.yaml config.yaml
 cp .env.example .env
+# config.yaml 仓库里已经有了,直接改它;config.example.yaml 是留作参考的原始副本
 ```
 
 ### 1. Xero:建一个免费的 OAuth App(3 分钟)
@@ -101,6 +120,9 @@ python run.py --month 2026-07
 
 ### 5. 上 GitHub Actions(5 分钟)
 
+> **先确认仓库是 Private。** Settings 顶部会写 `Private` 徽章。是 `Public` 的话现在就改 ——
+> 一旦跑过一次,日志里的数字就已经公开过了,改可见性也追不回来。
+
 仓库 → Settings → Secrets and variables → Actions,加这几个:
 
 | Secret | 必填 | 说明 |
@@ -115,8 +137,28 @@ python run.py --month 2026-07
 | `GOOGLE_SHEET_ID` | ⬜ | Sheet 归档,可选 |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | ⬜ | 邮件,可选 |
 
-把 `config.yaml` 提交进仓库(里面没有密钥),然后去 Actions 页手动触发一次
+改完 `config.yaml` 提交进仓库(里面没有密钥),然后去 Actions 页手动触发一次
 **财务月报** 确认能跑通。之后每月 1 日自动运行。
+
+---
+
+## 成熟度:哪些验过,哪些没有
+
+同一套代码,不同部分的把握程度差很多。踩坑时先看这张表:
+
+| 模块 | 状态 |
+| --- | --- |
+| Xero OAuth + 报表解析 | ✅ 对真实 API 验过(Demo Company AU) |
+| 金额计算与格式化 | ✅ 38 个离线测试 |
+| Stripe MRR / churn | ⚠️ **只跑过离线假数据,未接真实 API** |
+| OpenAI 生成正文 | ⚠️ 未接真实 API,`llm.model` 默认值不一定在你账号可用 |
+| Google Sheet / SMTP | ⚠️ 未验证 |
+| GitHub Actions 定时与 token 写回 | ⚠️ 未验证 |
+
+标 ⚠️ 的部分请**务必先用 `--no-llm --dry-run` 逐项对数**。
+
+前车之鉴:Xero 那半边曾经 36 个离线测试全绿,一接真实数据立刻炸出两个 bug,其中一个
+**是静默的** —— 现金显示 0.00,不报错,月报照常生成。离线测试绿 ≠ 数字对。
 
 ---
 
